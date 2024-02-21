@@ -248,7 +248,7 @@ def main():
 
 
             ## RERANKER
-            reranker = ReRanker(model_name='BAAI/bge-reranker-base')
+            reranker = ReRanker(model_name='cross-encoder/ms-marco-MiniLM-L-12-v2')
             model_name = model_choice
             encoding = encoding_for_model(model_name)
             

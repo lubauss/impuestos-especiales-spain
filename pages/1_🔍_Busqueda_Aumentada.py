@@ -200,7 +200,7 @@ def main():
 
 
     ## RERANKER
-    reranker = ReRanker(model_name='BAAI/bge-reranker-base')
+    reranker = ReRanker(model_name='cross-encoder/ms-marco-MiniLM-L-12-v2')
 
     ## LLM
     model_name = model_choice
