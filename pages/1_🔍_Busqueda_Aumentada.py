@@ -44,8 +44,8 @@ with st.sidebar:
         help='Elige un repositorio para determinar el conjunto de datos sobre el cual realizarás tu búsqueda. "Cloud" te permite acceder a datos alojados en nuestros servidores seguros, mientras que "Local" es para trabajar con datos alojados localmente en tu máquina.'
     )
 if client_type == 'Cloud':
-    api_key = st.secrets['WEAVIATE_CLOUD_API_KEY']
-    url = st.secrets['WEAVIATE_CLOUD_ENDPOINT']
+    api_key = os.environ['WEAVIATE_CLOUD_API_KEY']
+    url = os.environ['WEAVIATE_CLOUD_ENDPOINT']
 
     weaviate_client = WeaviateClient(
         endpoint=url,
@@ -58,7 +58,7 @@ if client_type == 'Cloud':
     logger.info(available_classes)
     logger.info(f"Endpoint: {client_type} | Classes: {available_classes}")
 elif client_type == 'Local':
-    url = st.secrets['WEAVIATE_LOCAL_ENDPOINT']
+    url = os.environ['WEAVIATE_LOCAL_ENDPOINT']
     weaviate_client = WeaviateClient(
         endpoint=url,
         # api_key=api_key,
@@ -204,7 +204,7 @@ def main():
 
     ## LLM
     model_name = model_choice
-    llm = GPT_Turbo(model=model_name, api_key=st.secrets['OPENAI_API_KEY'])
+    llm = GPT_Turbo(model=model_name, api_key=os.environ['OPENAI_API_KEY'])
     encoding = encoding_for_model(model_name)
 
 
