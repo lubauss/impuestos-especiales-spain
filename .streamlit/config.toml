@@ -1,3 +1,13 @@
+[runner]
+magicEnabled = false
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
+enableCORS = true
+
 [theme]
 base="dark"
 primaryColor="#7eff4b"
