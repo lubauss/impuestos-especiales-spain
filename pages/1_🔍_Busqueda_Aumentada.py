@@ -1,5 +1,5 @@
 from tiktoken import get_encoding, encoding_for_model
-from utils.weaviate_interface_v3_spa import WeaviateClient, WhereFilter
+from utils.weaviate_interface_v4 import WeaviateWCS, SearchFilter
 from utils.prompt_templates_spa import question_answering_prompt_series_spa
 from utils.openai_interface_spa import GPT_Turbo
 from openai import BadRequestError
@@ -47,27 +47,29 @@ if client_type == 'Cloud':
     api_key = os.environ['WEAVIATE_CLOUD_API_KEY']
     url = os.environ['WEAVIATE_CLOUD_ENDPOINT']
 
-    weaviate_client = WeaviateClient(
+    weaviate_client = WeaviateWCS(
         endpoint=url,
         api_key=api_key,
         # model_name_or_path='./models/finetuned-all-MiniLM-L6-v2-300',
-        model_name_or_path="intfloat/multilingual-e5-small",
-        # openai_api_key=os.environ['OPENAI_API_KEY']
+        # model_name_or_path="intfloat/multilingual-e5-small",
+        model_name_or_path="text-embedding-3-small",
+        openai_api_key=os.environ['OPENAI_API_KEY']
         )
-    available_classes=sorted(weaviate_client.show_classes())
-    logger.info(available_classes)
-    logger.info(f"Endpoint: {client_type} | Classes: {available_classes}")
+    available_collections=sorted(weaviate_client.show_all_collections())
+    logger.info(available_collections)
+    logger.info(f"Endpoint: {client_type} | Classes: {available_collections}")
 elif client_type == 'Local':
     url = os.environ['WEAVIATE_LOCAL_ENDPOINT']
-    weaviate_client = WeaviateClient(
+    weaviate_client = WeaviateWCS(
         endpoint=url,
         # api_key=api_key,
         # model_name_or_path='./models/finetuned-all-MiniLM-L6-v2-300',
-        model_name_or_path="intfloat/multilingual-e5-small",
-        # openai_api_key=os.environ['OPENAI_API_KEY']
+        # model_name_or_path="intfloat/multilingual-e5-small",
+        model_name_or_path="text-embedding-3-small",
+        openai_api_key=os.environ['OPENAI_API_KEY']
         )
-    available_classes=sorted(weaviate_client.show_classes())
-    logger.info(f"Endpoint: {client_type} | Classes: {available_classes}")
+    available_collections=sorted(weaviate_client.show_all_collections())
+    logger.info(f"Endpoint: {client_type} | Classes: {available_collections}")
 
 def main():
     
@@ -79,21 +81,21 @@ def main():
     if "openai_data_model" not in st.session_state:
         st.session_state["openai_data_model"] = available_models[0]
     
-    if 'class_name' not in st.session_state:
-        st.session_state['class_name'] = None
+    if 'collection_name' not in st.session_state:
+        st.session_state['collection_name'] = None
 
     with st.sidebar:
-        st.session_state['class_name'] = st.selectbox(
+        st.session_state['collection_name'] = st.selectbox(
             label='Repositorio:',
-            options=available_classes,
+            options=available_collections,
             index=None,
             placeholder='Repositorio',
             help='Elige un repositorio para determinar el conjunto de datos sobre el cual realizarás tu búsqueda. "Cloud" te permite acceder a datos alojados en nuestros servidores seguros, mientras que "Local" es para trabajar con datos alojados localmente en tu máquina.'
             )
         # Check if the collection name has been selected
-        class_name = st.session_state['class_name']
-        if class_name:
-            st.success(f"Repositorio seleccionado ✅: {st.session_state['class_name']}")
+        collection_name = st.session_state['collection_name']
+        if collection_name:
+            st.success(f"Repositorio seleccionado ✅: {st.session_state['collection_name']}")
 
         else:
             st.warning("🎗️ No olvides seleccionar el repositorio 👆 a consultar 🗄️.")
@@ -168,34 +170,35 @@ def main():
                 help='Ajusta la temperatura para la generación de texto con GPT, lo que influirá en la creatividad de las respuestas.'
             )
 
-    logger.info(weaviate_client.display_properties)
+    logger.info(weaviate_client.show_collection_properties)
 
-    def perform_search(client, retriever_choice, query, class_name, search_limit, guest_filter, display_properties, alpha_input):
+    def perform_search(client, retriever_choice, query, collection_name, search_limit, guest_filter, display_properties, alpha_input):
         if retriever_choice == "Keyword":
             return weaviate_client.keyword_search(
                 request=query,
-                class_name=class_name,
+                query_properties=['document_title', 'page_summary', 'content'],
+                collection_name=collection_name,
                 limit=search_limit,
-                where_filter=guest_filter,
-                display_properties=display_properties
+                filter=guest_filter,
             ), "Resultados de la Busqueda - Motor: Keyword: "
         elif retriever_choice == "Vector":
             return weaviate_client.vector_search(
                 request=query,
-                class_name=class_name,
+                collection_name= collection_name,
                 limit=search_limit,
-                where_filter=guest_filter,
-                display_properties=display_properties
+                filter=guest_filter,
+                return_properties=display_properties,
+                return_raw=False
             ), "Resultados de la Busqueda - Motor: Vector"
         elif retriever_choice == "Hybrid":
             return weaviate_client.hybrid_search(
                 request=query,
-                class_name=class_name,
+                collection_name= collection_name,
                 alpha=alpha_input,
                 limit=search_limit,
-                properties=["content"],
-                where_filter=guest_filter,
-                display_properties=display_properties
+                query_properties=['document_title', 'page_summary', 'content'],
+                filter=guest_filter,
+                return_properties=display_properties,
             ), "Resultados de la Busqueda - Motor: Hybrid"
 
 
@@ -224,10 +227,9 @@ def main():
     ############
     if query:
         # make hybrid call to weaviate
-        guest_filter = WhereFilter(
-            path=['document_title'],
-            operator='Equal',
-            valueText=guest_input).todict() if guest_input else None
+        guest_filter = SearchFilter(
+            property= ['document_title'],
+            query_value= 'Equal').todict() if guest_input else None
         
         
         # Determine the appropriate limit based on reranking
@@ -238,10 +240,10 @@ def main():
             client=weaviate_client,
             retriever_choice=retriever_choice,
             query=query,
-            class_name=class_name,
+            collection_name= collection_name,
             search_limit=search_limit,
             guest_filter=guest_filter,
-            display_properties=weaviate_client.display_properties,
+            display_properties=[prop.name for prop in weaviate_client.show_collection_properties(collection_name)],
             alpha_input=alpha_input if retriever_choice == "Hybrid" else None
             )
         
